@@ -1107,6 +1107,54 @@ def tf_py_wrap_cc(name,
       }))
 
 
+def tf_py_wrap_cc_no_lds(name,
+                             srcs,
+                             swig_includes=[],
+                             deps=[],
+                             copts=[],
+                             **kwargs):
+  module_name = name.split("/")[-1]
+  # Convert a rule name such as foo/bar/baz to foo/bar/_baz.so
+  # and use that as the name for the rule producing the .so file.
+  cc_library_name = "/".join(name.split("/")[:-1] + ["_" + module_name + ".so"])
+  cc_library_pyd_name = "/".join(
+      name.split("/")[:-1] + ["_" + module_name + ".pyd"])
+  extra_deps = []
+  _py_wrap_cc(
+      name=name + "_py_wrap",
+      srcs=srcs,
+      swig_includes=swig_includes,
+      deps=deps + extra_deps,
+      toolchain_deps=["//tools/defaults:crosstool"],
+      module_name=module_name,
+      py_module_name=name)
+  extra_linkopts = []
+
+  native.cc_binary(
+      name=cc_library_name,
+      srcs=[module_name + ".cc"],
+      copts=(copts + if_not_windows([
+          "-Wno-self-assign", "-Wno-sign-compare", "-Wno-write-strings"
+      ]) + tf_extension_copts()),
+      linkopts=tf_extension_linkopts() + extra_linkopts,
+      linkstatic=1,
+      linkshared=1,
+      deps=deps + extra_deps)
+  native.genrule(
+      name="gen_" + cc_library_pyd_name,
+      srcs=[":" + cc_library_name],
+      outs=[cc_library_pyd_name],
+      cmd="cp $< $@",)
+  native.py_library(
+      name=name,
+      srcs=[":" + name + ".py"],
+      srcs_version="PY2AND3",
+      data=select({
+          clean_dep("//tensorflow:windows"): [":" + cc_library_pyd_name],
+          "//conditions:default": [":" + cc_library_name],
+      }))
+
+
 def py_test(deps=[], **kwargs):
   native.py_test(
       deps=select({

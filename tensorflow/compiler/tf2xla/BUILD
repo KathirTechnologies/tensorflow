@@ -3,6 +3,7 @@ licenses(["notice"])  # Apache 2.0
 package_group(
     name = "internal",
     packages = [
+        "//...",
         "//tensorflow/compiler/aot/...",
         "//tensorflow/compiler/jit/...",
         "//tensorflow/compiler/tests/...",
